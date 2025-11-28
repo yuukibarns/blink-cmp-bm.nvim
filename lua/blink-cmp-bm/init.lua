@@ -10,6 +10,7 @@ function RgSource.new(opts)
     opts = opts or {}
 
     return setmetatable({
+        prefix_min_len = opts.prefix_min_len or 3,
         get_command = opts.get_command or function()
             return {
                 "rg",
@@ -17,17 +18,14 @@ function RgSource.new(opts)
                 "--json",
                 "--word-regexp",
                 "--ignore-case",
-                "--type=md",
+                "--type=xml",
                 "--",
-                "(" ..
-                "^(<!-- )?#+\\s+.+" ..
-                ")" ..
-                "|" ..
-                "(" ..
-                "^\\*\\*(Definition|Theorem|Lemma|Corollary|Proposition|Claim|Example|Problem)\\s+\\(.+?\\)(\\.)?\\*\\*" ..
-                ")",
-                vim.fs.root(0, ".git") or vim.fn.getcwd(),
+                "<title>.*</title>",
+                vim.fn.expand('~') .. "/.var/app/org.kde.okular/data/okular/bookmarks.xml"
             }
+        end,
+        get_prefix = opts.get_prefix or function(context)
+            return context.line:sub(1, context.cursor[2]):match("[%w_-]+$") or ""
         end,
     }, { __index = RgSource })
 end
@@ -35,7 +33,9 @@ end
 function RgSource:enabled() return vim.bo.filetype == 'markdown' and vim.fs.root(0, ".git") end
 
 function RgSource:get_completions(context, resolve)
-    if context.line:sub(context.bounds.start_col - 2, context.bounds.start_col - 1) ~= "**" then
+    local prefix = self.get_prefix(context)
+
+    if string.len(prefix) < self.prefix_min_len then
         resolve()
         return
     end
@@ -61,24 +61,15 @@ function RgSource:get_completions(context, resolve)
             end)
             :flatten()
             :each(function(submatch)
-                if submatch.match.text:match("^<!%-%-%s+#+%s+") or submatch.match.text:match("^#+%s+") then
-                    local text = submatch.match.text
-                        :gsub("^<!%-%-%s+", "")
-                        :gsub("%s+%-%->$", "")
-                        :gsub("^#+%s+", "")
-                        :gsub("%s+$", "")
-                    items[submatch.match.text] = {
-                        label = text,
-                        kind = require('blink.cmp.types').CompletionItemKind.Reference,
-                        insertText = text,
-                    }
-                else
-                    local text = submatch.match.text:match("%((.-)%)")
-                    items[submatch.match.text] = {
-                        label = text,
-                        kind = require('blink.cmp.types').CompletionItemKind.Reference,
-                        insertText = text,
-                    }
+                if submatch.match.text:match("<title>.*</title>") then
+                    local text = submatch.match.text:match("<title>(.-)</title>")
+                    if text then
+                        items[submatch.match.text] = {
+                            label = text,
+                            kind = require('blink.cmp.types').CompletionItemKind.Reference,
+                            insertText = text,
+                        }
+                    end
                 end
             end)
 
