@@ -30,7 +30,7 @@ function RgSource.new(opts)
     }, { __index = RgSource })
 end
 
-function RgSource:enabled() return vim.bo.filetype == 'markdown' and vim.fs.root(0, ".git") end
+function RgSource:enabled() return vim.bo.filetype == 'markdown' end
 
 function RgSource:get_completions(context, resolve)
     local prefix = self.get_prefix(context)
